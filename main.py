@@ -15,51 +15,6 @@ drone.send_command_without_return("rc {} {} {} {}".format(a,b,c,d))
 #                                       a b c d : 좌우 앞뒤 상하 yaw -100~100
 '''
 
-class drone():
-    def __init__(self, t=1):
-        # initialize with takeoff
-        self.tstart = time.time()
-        self.tello = tello.Tello()
-        self.tello.connect()
-        #self.tello.set_video_resolution(tello.Tello.RESOLUTION_480P)
-        self.tello.streamon()
-        print('battery: ', self.tello.get_battery(), '%\n')
-        self.tello.send_command_without_return("rc {} {} {} {}".format(0,0,0,0))
-        if t==1 : self.tello.takeoff()
-        self.qrd = qr()
-    def control(self, right, front, up, yaw):
-        #drone.send_command_without_return("rc {} {} {} {}".format(a, b, c, d))
-        #a b c d : 좌우 앞뒤 상하 yaw -100~100
-        self.tello.send_command_without_return("rc {} {} {} {}".format(right, front, up, yaw))
-    def control_r(self, right, front, up, yaw):
-        #drone.send_command_without_return("rc {} {} {} {}".format(a, b, c, d))
-        #a b c d : 좌우 앞뒤 상하 yaw -100~100
-        ret = self.tello.send_control_command("rc {} {} {} {}".format(right, front, up, yaw))
-        return ret
-    def frame(self):
-        self.frame = self.tello.get_frame_read().frame
-        return self.frame
-    def up(self, d):
-        self.tello.move_up(d)
-    def down(self, d):
-        self.tello.move_down(d)
-    def left(self, d):
-        self.tello.move_left(d)
-    def right(self, d):
-        self.tello.move_right(d)
-    def forward(self, d):
-        self.tello.move_forward(d)
-    def back(self, d):
-        self.tello.move_back(d)
-    def land(self):
-        self.tello.land()
-        self.tend = time.time() - self.tstart
-        print(f'Time : {self.tend:.3f}')
-    def qr(self):
-        value = self.qrd.detect(self.frame)
-        print('QR detected : ', value)
-        return value
-
 def main():
 ##### Initialize
     d = drone()
