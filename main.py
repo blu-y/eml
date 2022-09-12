@@ -40,7 +40,7 @@ def main():
                     drone.move_right(30)
                     drone.rotate_clockwise(100)
                     drone.move_forward(20)
-                else: cv2.putText(img_4, f'hover: {time.time()-t0:.2f}', (10, 40), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
+                else: cv2.putText(img_b['4'], f'hover: {time.time()-t0:.2f}', (10, 40), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
             if t0 == None and qr_value != '':
                 print('QR detected: ', qr_value)
                 if qr_value == 'hover':
