@@ -3,6 +3,11 @@ import numpy as np
 import pyzbar.pyzbar as pyzbar
 from djitellopy import tello
 import time
+import matplotlib.pyplot as plt
+
+def puttext(img, txt, org, clr=(0,0,0)):
+    cv2.putText(img, txt, org, cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
+    return img
 
 class qr():
     def __init__(self):
@@ -25,11 +30,9 @@ class qr():
         except: return '', '', qrimg
 
 class drone_tello():
-    def __init__(self, test = 0):
+    def __init__(self, takeoff = 1, debug = 0):
         '''
         Tello drone initialize:
-            test = 0 (takeoff, default)
-            test = 1 (no takeoff)
         '''
         self.tstart = time.time()
         self.tello = tello.Tello()
@@ -38,8 +41,9 @@ class drone_tello():
         self.tello.streamon()
         print('battery: ', self.tello.get_battery(), '%\n')
         self.tello.send_command_without_return("rc {} {} {} {}".format(0,0,0,0))
-        self.test = test
-        if self.test == 0 : self.tello.takeoff()
+        self.takeoff = takeoff
+        self.debug = debug
+        if self.takeoff == 0 : self.tello.takeoff()
         self.qrd = qr()
     def control(self, right, front, up, yaw):
         #drone.send_command_without_return("rc {} {} {} {}".format(a, b, c, d))
@@ -56,22 +60,26 @@ class drone_tello():
         #self.frame = cv2.GaussianBlur(self.frame, (3,3), 1, 1)
         return self.frame
     def up(self, d):
-        if self.test != 1: self.tello.move_up(d)
+        if self.takeoff != 1: self.tello.move_up(d)
     def down(self, d):
-        if self.test != 1: self.tello.move_down(d)
+        if self.takeoff != 1: self.tello.move_down(d)
     def left(self, d):
-        if self.test != 1: self.tello.move_left(d)
+        if self.takeoff != 1: self.tello.move_left(d)
     def right(self, d):
-        if self.test != 1: self.tello.move_right(d)
+        if self.takeoff != 1: self.tello.move_right(d)
     def forward(self, d):
-        if self.test != 1: self.tello.move_forward(d)
+        if self.takeoff != 1: self.tello.move_forward(d)
     def back(self, d):
-        if self.test != 1: self.tello.move_back(d)
+        if self.takeoff != 1: self.tello.move_back(d)
     def land(self):
-        if self.test != 1: self.tello.land()
+        if self.takeoff != 1: self.tello.land()
         self.tend = time.time()
         self.time = self.tend - self.tstart
         print(f'Time : {self.time:.3f}')
+        if self.debug == 1:
+            plt.imshow(self.frame)
+            plt.imshow(self.frame_)
+            plt.show()
     def qr(self, show = 1):
         value = self.qrd.detect(self.frame_)
         if show == 1: print('QR detected : ', value)
