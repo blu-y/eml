@@ -17,29 +17,20 @@ drone.send_command_without_return("rc {} {} {} {}".format(a,b,c,d))
 
 def main():
 ##### Initialize
-    d = drone()
-    [m1, m2, m3] = ['G', 'R', 'B']
-    [q0, q1, q2, q3] = ['X', 'X', 'X', 'X']
-    t0 = None
+    drone = drone_tello()
+    flag = ['K', 'R', 'B']
+    hw = ['X', 'X', 'X']
+    track = 'X'
+    t = [0, 0, 0, 0, 0, 0, 0]
     while True:
-        img = drone.get_frame_read().frame
-        img_ = np.copy(img)
-        img = cv2.resize(img, (360, 240))
-        img = cv2.GaussianBlur(img, (3,3), 1, 1)
-        # img = img.astype(np.uint8)
-        cir = dict()
-        img_4, img_b_r, img_b_g, img_b_b, img_c_r, img_c_g, img_c_b, cir['R'], cir['G'], cir['B'] = circle_bin_detection(img, s=100, v=130)
-        #img_4, img_b_r, img_b_g, img_b_b, img_c_r, img_c_g, img_c_b, c_r, c_g, c_b = circle_bin_detection(img, s=120, v=130)
-        cv2.imshow('circle', img_4)
+        drone.get_frame()
+        #cv2.imshow('original', drone.frame_)
+        img_b, img_c, cir = circle_bin_detection(drone.frame, flag=flag, s=100, v=130)
+        cv2.imshow('circle', img_b['4'])
         key = cv2.waitKey(1)
-        if key == 27:
-            cv2.imwrite('fail_720p.jpg', img_)
-            cv2.imwrite('fail_360p.jpg', img)
-            cv2.imwrite('bin.jpg', img_4)
-            break
 ##### Start: QR detection - Hover
-        if q0 != 'O':
-            qr_value = qrd.detect(img_)
+        if t == 0:
+            qr_value = drone.qr()
             #qr_value = 'hover' ###임시
             if t0 != None:
                 if (time.time() - t0) > 5:
@@ -56,87 +47,10 @@ def main():
                     t0 = time.time()
             else:
                 drone.send_command_without_return("rc {} {} {} {}".format(0,0,-10,0))
-##### Flag 1: Circle Detect and Follow
-        if q0 == 'O' and m1 != 'O':
-            com = circle_follow(cir, m1)
-            if com == 'O':
-                print('circle follow success')
-                m1 = com
-                sleep(1)
-            else:
-                drone.send_command_without_return(com)
-##### Flag 1: QR detection and Mission
-        if m1 == 'O' and q1 != 'O':
-            qr_value = qrd.detect(img_)
-            if qr_value != '':
-                print('QR detected: ', qr_value)
-                a1, a2 = mission_action(qr_value)
-                print('battery: ', drone.get_battery(), '%\n')
-                sleep(1)
-                drone.send_control_command(a1)
-                sleep(1)
-                if a2 != '':
-                    drone.send_control_command(a2)
-                #drone.send_control_command("up {}".format(20))
-                print('mission 1 complete')
-                q1 = 'O'
-                sleep(1)
-            else:
-                drone.send_command_without_return("rc {} {} {} {}".format(0,0,-10,0))
-##### Flag 2: Circle Detect and Follow 
-        if q1 == 'O' and m2 != 'O':
-            com = circle_follow(cir, m2)
-            if com == 'O':
-                print('circle follow success')
-                m2 = com
-                sleep(1)
-            else:
-                drone.send_command_without_return(com)
-##### Flag 2: QR detection and Mission
-        if m2 == 'O' and q2 != 'O':
-            qr_value = qrd.detect(img_)
-            if qr_value != '':
-                print('QR detected: ', qr_value)
-                a1, a2 = mission_action(qr_value)
-                print('battery: ', drone.get_battery(), '%\n')
-                sleep(1)
-                drone.send_control_command(a1)
-                sleep(1)
-                if a2 != '':
-                    drone.send_control_command(a2)
-                #drone.send_control_command("up {}".format(20))
-                print('mission 2 complete')
-                q2 = 'O'
-                sleep(1)
-            else:
-                drone.send_command_without_return("rc {} {} {} {}".format(0,0,-10,0))
-##### Flag 3: Circle Detect and Follow 
-        if q2 == 'O' and m3 != 'O':
-            com = circle_follow(cir, m3)
-            if com == 'O':
-                print('circle follow success')
-                m3 = com
-                sleep(1)
-            else:
-                drone.send_command_without_return(com)
-##### Flag 3: QR detection and Mission 
-        if m3 == 'O' and q3 != 'O':
-            qr_value = qrd.detect(img_)
-            if qr_value != '':
-                print('QR detected: ', qr_value)
-                a1, a2 = mission_action(qr_value)
-                print('battery: ', drone.get_battery(), '%\n')
-                sleep(1)
-                drone.send_control_command(a1)
-                sleep(1)
-                if a2 != '':
-                    drone.send_control_command(a2)
-                print('mission 3 complete')
-                q3 = 'O'
-                sleep(1)
-            else:
-                drone.send_command_without_return("rc {} {} {} {}".format(0,0,-10,0))
-        if q3 == 'O':
+        if key == 27:
+            cv2.imwrite('fail_720p.jpg', drone.frame_)
+            cv2.imwrite('fail_360p.jpg', drone.frame)
+            cv2.imwrite('bin.jpg', img_b['4'])
             break
     sleep(0.5)
     drone.send_command_without_return("rc {} {} {} {}".format(0,0,0,0))

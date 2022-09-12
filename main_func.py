@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import pyzbar.pyzbar as pyzbar
+from djitellopy import tello
+import time
 
 class qr():
     def __init__(self):
@@ -22,9 +24,13 @@ class qr():
             return value, bbox, qrimg
         except: return '', '', qrimg
 
-class drone():
-    def __init__(self, t=1):
-        # initialize with takeoff
+class drone_tello():
+    def __init__(self, test = 0):
+        '''
+        Tello drone initialize:
+            test = 0 (takeoff, default)
+            test = 1 (no takeoff)
+        '''
         self.tstart = time.time()
         self.tello = tello.Tello()
         self.tello.connect()
@@ -32,7 +38,8 @@ class drone():
         self.tello.streamon()
         print('battery: ', self.tello.get_battery(), '%\n')
         self.tello.send_command_without_return("rc {} {} {} {}".format(0,0,0,0))
-        if t==1 : self.tello.takeoff()
+        self.test = test
+        if self.test == 0 : self.tello.takeoff()
         self.qrd = qr()
     def control(self, right, front, up, yaw):
         #drone.send_command_without_return("rc {} {} {} {}".format(a, b, c, d))
@@ -43,28 +50,35 @@ class drone():
         #a b c d : 좌우 앞뒤 상하 yaw -100~100
         ret = self.tello.send_control_command("rc {} {} {} {}".format(right, front, up, yaw))
         return ret
-    def frame(self):
-        self.frame = self.tello.get_frame_read().frame
+    def get_frame(self):
+        self.frame_ = self.tello.get_frame_read().frame
+        self.frame = cv2.resize(self.frame, (360, 240))
+        #self.frame = cv2.GaussianBlur(self.frame, (3,3), 1, 1)
         return self.frame
     def up(self, d):
-        self.tello.move_up(d)
+        if self.test != 1: self.tello.move_up(d)
     def down(self, d):
-        self.tello.move_down(d)
+        if self.test != 1: self.tello.move_down(d)
     def left(self, d):
-        self.tello.move_left(d)
+        if self.test != 1: self.tello.move_left(d)
     def right(self, d):
-        self.tello.move_right(d)
+        if self.test != 1: self.tello.move_right(d)
     def forward(self, d):
-        self.tello.move_forward(d)
+        if self.test != 1: self.tello.move_forward(d)
     def back(self, d):
-        self.tello.move_back(d)
+        if self.test != 1: self.tello.move_back(d)
     def land(self):
-        self.tello.land()
-        self.tend = time.time() - self.tstart
-        print(f'Time : {self.tend:.3f}')
-    def qr(self):
-        value = self.qrd.detect(self.frame)
-        print('QR detected : ', value)
+        if self.test != 1: self.tello.land()
+        self.tend = time.time()
+        self.time = self.tend - self.tstart
+        print(f'Time : {self.time:.3f}')
+    def qr(self, show = 1):
+        value = self.qrd.detect(self.frame_)
+        if show == 1: print('QR detected : ', value)
+        return value
+    def hw(self, show = 1):
+        value = self.hwd.detect(self.frame_)
+        if show == 1: print('Number detected : ', value)
         return value
 
 def imageGP(img):
@@ -132,6 +146,7 @@ def clr_bin(img, clr, r=20, s=150, v=100):
     img_b_b = cv2.inRange(img_h, 120-r, 120+r)
     img_b_b[img_v>v] = 0
     img_b_b[img_s<s] = 0
+    # black 부분 수정 필요
     img_b_k = 255 - np.zeros_like(img_h)
     img_b_k[img_v>100] = 0
     img_b_k[img_s>100] = 0
@@ -222,19 +237,25 @@ def blob(image):
     """
     return image_with_keypoints, circle, keypoints
 
-def circle_bin_detection(img, r=20, s=150, v=130):
+def circle_bin_detection(img, r=20, s=150, v=130, flag = ['R', 'G', 'B']):
     img_b_r = clr_bin(img, 'R', r, s, v)
     img_c_r, c_r, kp_r = blob(img_b_r)
     img_b_g = clr_bin(img, 'G', r, s, v)
     img_c_g, c_g, kp_g = blob(img_b_g)
     img_b_b = clr_bin(img, 'B', r, s, v)
     img_c_b, c_b, kp_b = blob(img_b_b)
-    img_4 = np.vstack((np.hstack((img, img_c_r)),np.hstack((img_c_g, img_c_b))))
+    img_b_k = clr_bin(img, 'K', r, s, v)
+    img_c_k, c_k, kp_k = blob(img_b_k)
+    img_b = {'R': img_b_r, 'G': img_b_g, 'B': img_b_b, 'K': img_b_k}
+    img_4 = np.vstack((np.hstack((img, img_b[flag[0]])),np.hstack((img_b[flag[1]], img_b[flag[2]]))))
     cv2.putText(img_4, 'Original', (10, 20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
-    cv2.putText(img_4, 'R', (370, 20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
-    cv2.putText(img_4, 'G', (10, 260), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
-    cv2.putText(img_4, 'B', (370, 260), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
-    return img_4, img_b_r, img_b_g, img_b_b, img_c_r, img_c_g, img_c_b, c_r, c_g, c_b
+    cv2.putText(img_4, flag[0], (370, 20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
+    cv2.putText(img_4, flag[1], (10, 260), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
+    cv2.putText(img_4, flag[2], (370, 260), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
+    img_b['4'] = img_4
+    img_c = {'R': img_c_r, 'G': img_c_g, 'B': img_c_b, 'K': img_c_k}
+    cir = {'R': c_r, 'G': c_g, 'B': c_b, 'K': c_k}
+    return img_b, img_c, cir
 
 def calc(formula):
     num1 = int(formula[0])
