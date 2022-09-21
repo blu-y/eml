@@ -1,9 +1,20 @@
+#-*- coding: utf-8 -*-
 import cv2
 import numpy as np
 import pyzbar.pyzbar as pyzbar
 from djitellopy import tello
 import time
 import matplotlib.pyplot as plt
+import torch
+import pandas as pd
+
+'''
+기본 명령
+drone.move_up(50)
+drone.send_control_command("down {}".format(20))
+drone.send_command_without_return("rc {} {} {} {}".format(a,b,c,d))
+#                                       a b c d : 좌우 앞뒤 상하 yaw -100~100
+'''
 
 def puttext(img, txt, org, clr=(0,0,0)):
     cv2.putText(img, txt, org, cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
@@ -43,42 +54,52 @@ class drone_tello():
         self.tello.send_command_without_return("rc {} {} {} {}".format(0,0,0,0))
         self.takeoff = takeoff
         self.debug = debug
-        if self.takeoff == 0 : self.tello.takeoff()
+        if self.takeoff == 1 : self.tello.takeoff()
         self.qrd = qr()
-    def control(self, right, front, up, yaw):
+    def control(self, left=0, right=0, front=0, back=0, up=0, down=0, yaw=0):
         #drone.send_command_without_return("rc {} {} {} {}".format(a, b, c, d))
         #a b c d : 좌우 앞뒤 상하 yaw -100~100
-        self.tello.send_command_without_return("rc {} {} {} {}".format(right, front, up, yaw))
-    def control_r(self, right, front, up, yaw):
-        #drone.send_command_without_return("rc {} {} {} {}".format(a, b, c, d))
+        if self.takeoff == 1: 
+            self.tello.send_command_without_return("rc {} {} {} {}".format(right-left, front-back, up-down, yaw))
+    def com(self, command):
+        if self.takeoff == 1: 
+            self.tello.send_command_without_return(command)
+    def control_r(self, left=0, right=0, front=0, back=0, up=0, down=0, yaw=0):
+        #drone.send_control_command("rc {} {} {} {}".format(a, b, c, d))
         #a b c d : 좌우 앞뒤 상하 yaw -100~100
-        ret = self.tello.send_control_command("rc {} {} {} {}".format(right, front, up, yaw))
-        return ret
+        if self.takeoff == 1: 
+            return self.tello.send_control_command("rc {} {} {} {}".format(right-left, front-back, up-down, yaw))
+        else: return False
     def get_frame(self):
         self.frame_ = self.tello.get_frame_read().frame
-        self.frame = cv2.resize(self.frame, (360, 240))
+        self.frame = cv2.resize(self.frame_, (360, 240))
         #self.frame = cv2.GaussianBlur(self.frame, (3,3), 1, 1)
         return self.frame
     def up(self, d):
-        if self.takeoff != 1: self.tello.move_up(d)
+        if self.takeoff == 1: self.tello.move_up(d)
     def down(self, d):
-        if self.takeoff != 1: self.tello.move_down(d)
+        if self.takeoff == 1: self.tello.move_down(d)
     def left(self, d):
-        if self.takeoff != 1: self.tello.move_left(d)
+        if self.takeoff == 1: self.tello.move_left(d)
     def right(self, d):
-        if self.takeoff != 1: self.tello.move_right(d)
+        if self.takeoff == 1: self.tello.move_right(d)
     def forward(self, d):
-        if self.takeoff != 1: self.tello.move_forward(d)
+        if self.takeoff == 1: self.tello.move_forward(d)
     def back(self, d):
-        if self.takeoff != 1: self.tello.move_back(d)
+        if self.takeoff == 1: self.tello.move_back(d)
     def land(self):
-        if self.takeoff != 1: self.tello.land()
+        if self.takeoff == 1: self.tello.land()
         self.tend = time.time()
         self.time = self.tend - self.tstart
         print(f'Time : {self.time:.3f}')
+        print('battery: ', self.tello.get_battery(), '%\n')
         if self.debug == 1:
+            plt.figure('frame')
             plt.imshow(self.frame)
+            plt.figure('original')
             plt.imshow(self.frame_)
+            plt.figure('hsv')
+            plt.imshow(cv2.cvtColor(self.frame_, cv2.COLOR_BGR2HSV))
             plt.show()
     def qr(self, show = 1):
         value = self.qrd.detect(self.frame_)
@@ -146,7 +167,7 @@ def clr_bin(img, clr, r=20, s=150, v=100):
     img_v = hsv[:,:,2]
     img_b_r = cv2.inRange(img_h, 180-r, 180)
     img_b_r = img_b_r + cv2.inRange(img_h, 0, r)
-    img_b_r[img_v>v+40] = 0 #+40 는 일단 임시
+    img_b_r[img_v>v+40] = 0 #+40은 일단 임시
     img_b_r[img_s<s+60] = 0
     img_b_g = cv2.inRange(img_h, 80-r, 80+r)
     img_b_g[img_v>v] = 0
@@ -155,9 +176,7 @@ def clr_bin(img, clr, r=20, s=150, v=100):
     img_b_b[img_v>v] = 0
     img_b_b[img_s<s] = 0
     # black 부분 수정 필요
-    img_b_k = 255 - np.zeros_like(img_h)
-    img_b_k[img_v>100] = 0
-    img_b_k[img_s>100] = 0
+    img_b_k = cv2.inRange(img_v, 0, 30)
     if clr == 'R': return img_b_r
     if clr == 'G': return img_b_g
     if clr == 'B': return img_b_b
@@ -245,24 +264,20 @@ def blob(image):
     """
     return image_with_keypoints, circle, keypoints
 
-def circle_bin_detection(img, r=20, s=150, v=130, flag = ['R', 'G', 'B']):
-    img_b_r = clr_bin(img, 'R', r, s, v)
-    img_c_r, c_r, kp_r = blob(img_b_r)
-    img_b_g = clr_bin(img, 'G', r, s, v)
-    img_c_g, c_g, kp_g = blob(img_b_g)
-    img_b_b = clr_bin(img, 'B', r, s, v)
-    img_c_b, c_b, kp_b = blob(img_b_b)
-    img_b_k = clr_bin(img, 'K', r, s, v)
-    img_c_k, c_k, kp_k = blob(img_b_k)
-    img_b = {'R': img_b_r, 'G': img_b_g, 'B': img_b_b, 'K': img_b_k}
-    img_4 = np.vstack((np.hstack((img, img_b[flag[0]])),np.hstack((img_b[flag[1]], img_b[flag[2]]))))
+def circle_bin_detection(img, r=20, s=150, v=130, flag = ['K', 'R', 'B']):
+    img_b = dict()
+    img_c = dict()
+    cir = dict()
+    img_4 = img
+    for i in flag:
+        img_b[i] = clr_bin(img, i, r, s, v)
+        img_c[i], cir[i], _ = blob(img_b[i])
+    img_4 = np.vstack((np.hstack((img_4, img_c[flag[0]])), np.hstack((img_c[flag[1]], img_c[flag[2]]))))
     cv2.putText(img_4, 'Original', (10, 20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
-    cv2.putText(img_4, flag[0], (370, 20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
-    cv2.putText(img_4, flag[1], (10, 260), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
-    cv2.putText(img_4, flag[2], (370, 260), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
+    cv2.putText(img_4, flag[0], (img.shape[1]+10, 20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
+    cv2.putText(img_4, flag[1], (10, img.shape[0]+20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
+    cv2.putText(img_4, flag[2], (img.shape[1]+10, img.shape[0]+20), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
     img_b['4'] = img_4
-    img_c = {'R': img_c_r, 'G': img_c_g, 'B': img_c_b, 'K': img_c_k}
-    cir = {'R': c_r, 'G': c_g, 'B': c_b, 'K': c_k}
     return img_b, img_c, cir
 
 def calc(formula):
@@ -279,10 +294,12 @@ def calc(formula):
         return num1/num2
     else: return 'X'
     
-def mission_action(s):
-    i = calc(s) # string >> calculating
+def mission_action(i):
+    #i = calc(s) # string >> calculating
     a1 = ""
     a2 = ""
+    a3 = ""
+    a4 = ""
     if i == 1:
         a1 = "up {}".format(30)
         a2 = "down {}".format(30)
@@ -303,6 +320,44 @@ def mission_action(s):
         a1 = "cw {}".format(360)   
         print('answer = 5, clockwise 360')
     return a1, a2
+
+def action(drone, i):
+    if i == 1:
+        print('back 30, front 30')
+        drone.com("back {}".format(30))
+        drone.com("front {}".format(30))
+    if i == 2:
+        print('left 30, right 30')
+        drone.com("left {}".format(30))
+        drone.com("right {}".format(30))
+    if i == 3:
+        print('clockwise 360')
+        drone.com("cw {}".format(360))
+    if i == 4:
+        print('right 10, up 10, left 10, down 10') # 이거 되나?
+        drone.com("right {}".format(30))
+        drone.com("up {}".format(30))
+        drone.com("left {}".format(30))
+        drone.com("down {}".format(30))
+    if i == 5:
+        print('flip backward')
+        drone.com("flip {}".format("b"))
+    if i == 6:
+        print('up 30, flip, down 30')
+        drone.com("up {}".format(30))
+        drone.com("flip {}".format("b"))
+        drone.com("down {}".format(30))
+    if i == 7:
+        print('flip left')
+        drone.com("flip {}".format("l"))
+    if i == 8:
+        print('up 30, down 30')
+        drone.com("up {}".format(30))
+        drone.com("down {}".format(30))
+    if i == 9:
+        print('capture picture')
+        cv2.imwrite('9.png', drone.frame_)
+        print('9.png saved')
 
 def mission(num, drone):
     if num == 1:
@@ -331,4 +386,42 @@ def circle_follow(cir, clr):
         return "rc {} {} {} {}".format(0,0,(100-cir[clr][0][1])/2,0)
     if cir[clr][0][2] < 70:#40:
         return "rc {} {} {} {}".format(0,(80-cir[clr][0][2])/1.5,0,0)
-    return 'O'
+    return True
+
+class YOLO():
+    def __init__(self):
+        self.model = torch.hub.load('ultralytics/yolov5', 'custom', path='yolo.pt', force_reload=True)
+    def detect_letter(self, img):
+        yolo = self.model(img)
+        df = yolo.pandas().xyxy[0]
+        yolo.display(render=True)
+        if df.length>0:
+            ret = True
+            letter = df[0][0] # 수정 필요
+            print('letter = ', letter)
+        else: 
+            ret = False
+            letter = None
+        return ret, letter, img
+    def detect_object(self, img):
+        yolo = self.model(img)
+        df = yolo.pandas().xyxy[0]
+        yolo.display(render=True)
+        return df, img
+
+def object_follow(df, label):
+    x = df[label]['x']
+    y = df[label]['y']
+    size = None
+    size = df[label]['size']
+    if size == None:
+        return "rc {} {} {} {}".format(0,0,0,50)
+    if size > 60:
+        print(label, 'detected')
+    if abs(x-180)>15:
+        return "rc {} {} {} {}".format((x-180)/2.6,0,0,0)
+    if abs(y-100)>30:
+        return "rc {} {} {} {}".format(0,0,(100-y)/2,0)
+    if size < 70:#40:
+        return "rc {} {} {} {}".format(0,(80-size)/1.5,0,0)
+    return True
