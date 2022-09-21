@@ -1,58 +1,116 @@
+#-*- coding: utf-8 -*-
 import cv2
 import numpy as np
 import time
-import pyzbar.pyzbar as pyzbar
 from main_func import *
-from time import sleep
-from djitellopy import tello
 import matplotlib.pyplot as plt
-
-'''
-기본 명령
-drone.move_up(50)
-drone.send_control_command("down {}".format(20))
-drone.send_command_without_return("rc {} {} {} {}".format(a,b,c,d))
-#                                       a b c d : 좌우 앞뒤 상하 yaw -100~100
-'''
 
 def main():
 # Initialize
-    drone = drone_tello()
+    #fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+    #rec = cv2.VideoWriter('rec.avi', fourcc, 15, (h, w))
+    yolo = YOLO()
     debug = 1
+    takeoff = 0
+    drone = drone_tello(takeoff=takeoff, debug=debug)
     flag = ['K', 'R', 'B']
     hw = ['X', 'X', 'X']
     track = 'X'
-    t = ['X', 'O', 'O', 'O', 'O', 'O']
+    t = {'H':True, 'F1':False, 'H1':False, 'F2':False, 'H2':False, 'F3':False, 'H3':False, 'T':False, 'L':False}
     while True:
         img = drone.get_frame()
+        print(img.shape)
         #cv2.imshow('original', drone.frame_)
-        img_b, img_c, cir = circle_bin_detection(img, flag=flag, s=100, v=130)
-        cv2.imshow('circle', img_b['4'])
-        key = cv2.waitKey(1)
-### 1. QR detection - fover
-        if t[0] != 'O':
-            if drone.qr() == 'hover' and t[0] == 'X': t[0] = time.time()
-            if t[0] != 'X' and time.time() - t[0] < 5: 
-                img_b['4'] = puttext(img_b['4'], f'hover: {time.time()-t[0]:.2f}', (10, 40))
-            else: 
-                t[0:2] = ['O', 'X']
+        show_bin = t['H']+t['F1']+t['H1']+t['F2']+t['H2']+t['F3']+t['H3']
+        if show_bin == 1: 
+            img_b, img_c, cir = circle_bin_detection(img, flag=flag, s=100, v=130)
+### 1. QR detection - hover
+        if t['H']:
+            if t['H'] == 1:
+                if time.time() - t['Ht'] > 5: 
+                    t['H'] = False
+                    t['F1'] = True
+                else: 
+                    img_b['4'] = puttext(img_b['4'], f"hover: {time.time()-t['Ht']:.2f}", (10, 40))
+            elif drone.qr() == 'hover':
+                if t['H']!=1: 
+                    t['Ht'] = time.time()
+                    drone.control()
+                    t['H']==1
+            else: drone.control(right=20, down=10) # control 명령 수정 필요
 ### 2.1 Circle follow and read number - black
-        if t[1] != 'O':
-            t[1:3] = ['O', 'X']
+        if t['F1']:
+            com = circle_follow(cir, flag[0])
+            if com == True:
+                print('circle follow success')
+                cv2.imwrite('flag1.png', img_b['4'])
+                drone.control()
+                t['F1'] = False
+                t['H1'] = True
+            else: drone.com(com)
+        if t['H1']:
+            ret, letter, drone.frame_ = yolo.detect_letter(drone.frame_)
+            if ret:
+                action(drone, letter)
+                t['H1'] = False
+                t['F2'] = True
+            else: drone.control(down=10)
 ### 2.2 Circle follow and read number - red
-        if t[2] != 'O':
-            t[2:4] = ['O', 'X']
+        if t['F2']:
+            com = circle_follow(cir, flag[1])
+            if com == True:
+                print('circle follow success')
+                cv2.imwrite('flag2.png', img_b['4'])
+                drone.control()
+                t['F2'] = False
+                t['H2'] = True
+            else: drone.com(com)
+        if t['H2']:
+            ret, letter, drone.frame_ = yolo.detect_letter(drone.frame_)
+            if ret:
+                action(drone, letter)
+                t['H2'] = False
+                t['F3'] = True
+            else: drone.control(down=10)
 ### 2.3 Circle follow and read number - blue
-        if t[3] != 'O':
-            t[3:5] = ['O', 'X']
+        if t['F3']:
+            com = circle_follow(cir, flag[2])
+            if com == True:
+                print('circle follow success')
+                cv2.imwrite('flag3.png', img_b['4'])
+                drone.control()
+                t['F3'] = False
+                t['H3'] = True
+            else: drone.com(com)
+        if t['H3']:
+            ret, letter, drone.frame_ = yolo.detect_letter(drone.frame_)
+            if ret:
+                action(drone, letter)
+                t['H3'] = False
+                t['T'] = True
+            else: drone.control(down=10)
 ### 3. Image tracking 1 - KAU
-        if t[4] != 'O':
-            t[4:6] = ['O', 'X']
+        if t['T']:
+            df, drone.frame_ = yolo.detect_object(drone.frame_)
+            com = object_follow(df, 'KAU')
+            if com == True:
+                t['T'] = False
+                t['L'] = True
+            else: drone.com(com)
 ### 4. Image tracking 2 - plane
-        if t[5] != 'O':
-            t[5] = ['O']
+        if t['L']:
+            df, cor, drone.frame_ = yolo.detect_object(drone.frame_)
+            com = object_follow(df, 'F22')
+            if com == True:
+                t['L'] = False
+                break
+            else: drone.com(com)
 ### Visualize
-        cv2.imshow('circle', img_b['4'])
+        if show_bin == 1: 
+            cv2.imshow('mission', img_b['4'])
+        else: cv2.imshow('mission', drone.frame_) #change to yolo
+        key = cv2.waitKey(1)
+        
 ### Abort
         if key == 27:
             cv2.imwrite('fail_720p.jpg', drone.frame_)
@@ -60,171 +118,18 @@ def main():
             cv2.imwrite('fail_bin.jpg', img_b['4'])
             break
 # Land
-    drone.send_command_without_return("rc {} {} {} {}".format(0,0,0,0))
-    print('\nbattery: ', drone.get_battery(), '%\n')
     drone.land()
     print("mission complete!")
-    print(f"time: {time.time() - t:.2f}")
     cv2.destroyAllWindows()
 # Debug
-    if debug == 1:
+    if drone.debug == 1:
         plt.figure('img_original')
-        plt.imshow('img_')
+        plt.imshow(drone.frame_)
         plt.figure('hsv')
-        plt.imshow(clr_bin(img, 'X'))
+        plt.imshow(clr_bin(drone.frame_, 'X'))
         plt.figure('bin')
         plt.imshow(img_b['4'])
         plt.show()
-
-''' 2차 예선
-def main():
-##### Initialize
-    t = time.time()
-    drone = tello.Tello()
-    qrd = qr()
-    drone.connect()
-    # drone.set_video_resolution(tello.Tello.RESOLUTION_480P)
-    drone.streamon()
-    img = drone.get_frame_read().frame
-    print('\nbattery: ', drone.get_battery(), '%\n')
-    drone.send_command_without_return("rc {} {} {} {}".format(0,0,0,0))
-    drone.takeoff()
-    [m1, m2, m3] = ['G', 'R', 'B']
-    [q0, q1, q2, q3] = ['X', 'X', 'X', 'X']
-    t0 = None
-    while True:
-        img = drone.get_frame_read().frame
-        img_ = np.copy(img)
-        img = cv2.resize(img, (360, 240))
-        img = cv2.GaussianBlur(img, (3,3), 1, 1)
-        # img = img.astype(np.uint8)
-        cir = dict()
-        img_4, img_b_r, img_b_g, img_b_b, img_c_r, img_c_g, img_c_b, cir['R'], cir['G'], cir['B'] = circle_bin_detection(img, s=100, v=130)
-        #img_4, img_b_r, img_b_g, img_b_b, img_c_r, img_c_g, img_c_b, c_r, c_g, c_b = circle_bin_detection(img, s=120, v=130)
-        cv2.imshow('circle', img_4)
-        key = cv2.waitKey(1)
-        if key == 27:
-            cv2.imwrite('fail_720p.jpg', img_)
-            cv2.imwrite('fail_360p.jpg', img)
-            cv2.imwrite('bin.jpg', img_4)
-            break
-##### Start: QR detection - Hover
-        if q0 != 'O':
-            qr_value = qrd.detect(img_)
-            #qr_value = 'hover' ###임시
-            if t0 != None:
-                if (time.time() - t0) > 5:
-                    q0 = 'O'
-                    #sleep(1)
-                    # 벽이랑 떨어져서 뒤돌기
-                    drone.move_right(30)
-                    drone.rotate_clockwise(100)
-                    drone.move_forward(20)
-                else: cv2.putText(img_4, f'hover: {time.time()-t0:.2f}', (10, 40), cv2.FONT_HERSHEY_PLAIN, 1, (0,0,0))
-            if t0 == None and qr_value != '':
-                print('QR detected: ', qr_value)
-                if qr_value == 'hover':
-                    t0 = time.time()
-            else:
-                drone.send_command_without_return("rc {} {} {} {}".format(0,0,-10,0))
-##### Flag 1: Circle Detect and Follow
-        if q0 == 'O' and m1 != 'O':
-            com = circle_follow(cir, m1)
-            if com == 'O':
-                print('circle follow success')
-                m1 = com
-                sleep(1)
-            else:
-                drone.send_command_without_return(com)
-##### Flag 1: QR detection and Mission
-        if m1 == 'O' and q1 != 'O':
-            qr_value = qrd.detect(img_)
-            if qr_value != '':
-                print('QR detected: ', qr_value)
-                a1, a2 = mission_action(qr_value)
-                print('battery: ', drone.get_battery(), '%\n')
-                sleep(1)
-                drone.send_control_command(a1)
-                sleep(1)
-                if a2 != '':
-                    drone.send_control_command(a2)
-                #drone.send_control_command("up {}".format(20))
-                print('mission 1 complete')
-                q1 = 'O'
-                sleep(1)
-            else:
-                drone.send_command_without_return("rc {} {} {} {}".format(0,0,-10,0))
-##### Flag 2: Circle Detect and Follow 
-        if q1 == 'O' and m2 != 'O':
-            com = circle_follow(cir, m2)
-            if com == 'O':
-                print('circle follow success')
-                m2 = com
-                sleep(1)
-            else:
-                drone.send_command_without_return(com)
-##### Flag 2: QR detection and Mission
-        if m2 == 'O' and q2 != 'O':
-            qr_value = qrd.detect(img_)
-            if qr_value != '':
-                print('QR detected: ', qr_value)
-                a1, a2 = mission_action(qr_value)
-                print('battery: ', drone.get_battery(), '%\n')
-                sleep(1)
-                drone.send_control_command(a1)
-                sleep(1)
-                if a2 != '':
-                    drone.send_control_command(a2)
-                #drone.send_control_command("up {}".format(20))
-                print('mission 2 complete')
-                q2 = 'O'
-                sleep(1)
-            else:
-                drone.send_command_without_return("rc {} {} {} {}".format(0,0,-10,0))
-##### Flag 3: Circle Detect and Follow 
-        if q2 == 'O' and m3 != 'O':
-            com = circle_follow(cir, m3)
-            if com == 'O':
-                print('circle follow success')
-                m3 = com
-                sleep(1)
-            else:
-                drone.send_command_without_return(com)
-##### Flag 3: QR detection and Mission 
-        if m3 == 'O' and q3 != 'O':
-            qr_value = qrd.detect(img_)
-            if qr_value != '':
-                print('QR detected: ', qr_value)
-                a1, a2 = mission_action(qr_value)
-                print('battery: ', drone.get_battery(), '%\n')
-                sleep(1)
-                drone.send_control_command(a1)
-                sleep(1)
-                if a2 != '':
-                    drone.send_control_command(a2)
-                print('mission 3 complete')
-                q3 = 'O'
-                sleep(1)
-            else:
-                drone.send_command_without_return("rc {} {} {} {}".format(0,0,-10,0))
-        if q3 == 'O':
-            break
-    sleep(0.5)
-    drone.send_command_without_return("rc {} {} {} {}".format(0,0,0,0))
-    print('\nbattery: ', drone.get_battery(), '%\n')
-    drone.land()
-    print("mission complete!")
-    print(f"time: {time.time() - t:.2f}")
-    cv2.destroyAllWindows()
-##### for troubleshoot
-    #plt.figure('img_original')
-    #plt.imshow('img_')
-    #plt.figure('hsv')
-    #plt.imshow(clr_bin(img, 'X'))
-    #plt.figure('bin')
-    #plt.imshow(img_4)
-    #plt.show()
-'''
 
 if __name__ == '__main__':
     main()
