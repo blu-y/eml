@@ -16,28 +16,28 @@ def main():
     flag = ['K', 'R', 'B']
     hw = ['X', 'X', 'X']
     track = 'X'
-    t = {'H':True, 'F1':False, 'H1':False, 'F2':False, 'H2':False, 'F3':False, 'H3':False, 'T':False, 'L':False}
+    t = {'Ht':False, 'H':True, 'Hq': True, 'F1':False, 'H1':False, 'F2':False, 'H2':False, 'F3':False, 'H3':False, 'T':False, 'L':False}
     while True:
         img = drone.get_frame()
-        print(img.shape)
         #cv2.imshow('original', drone.frame_)
         show_bin = t['H']+t['F1']+t['H1']+t['F2']+t['H2']+t['F3']+t['H3']
         if show_bin == 1: 
             img_b, img_c, cir = circle_bin_detection(img, flag=flag, s=100, v=130)
 ### 1. QR detection - hover
         if t['H']:
-            if t['H'] == 1:
+            if t['Ht']:
                 if time.time() - t['Ht'] > 5: 
+                    print('hover 5s success')
                     t['H'] = False
                     t['F1'] = True
                 else: 
                     img_b['4'] = puttext(img_b['4'], f"hover: {time.time()-t['Ht']:.2f}", (10, 40))
             elif drone.qr() == 'hover':
-                if t['H']!=1: 
+                if t['Hq']: 
                     t['Ht'] = time.time()
                     drone.control()
-                    t['H']==1
-            else: drone.control(right=20, down=10) # control 명령 수정 필요
+                    t['Ht']=True
+            else: drone.control(right=20, down=10) # control 
 ### 2.1 Circle follow and read number - black
         if t['F1']:
             com = circle_follow(cir, flag[0])
