@@ -7,13 +7,17 @@ import time
 import matplotlib.pyplot as plt
 import torch
 import pandas as pd
+import os
+from os import path
+import sys
+#sys.path.append(path(__file__))
 
 '''
 기본 명령
 drone.move_up(50)
 drone.send_control_command("down {}".format(20))
 drone.send_command_without_return("rc {} {} {} {}".format(a,b,c,d))
-#                                       a b c d : 좌우 앞뒤 상하 yaw -100~100
+#                                       a b c d : 좌우 ?��?�� ?��?�� yaw -100~100
 '''
 
 def puttext(img, txt, org, clr=(0,0,0)):
@@ -58,7 +62,7 @@ class drone_tello():
         self.qrd = qr()
     def control(self, left=0, right=0, front=0, back=0, up=0, down=0, yaw=0):
         #drone.send_command_without_return("rc {} {} {} {}".format(a, b, c, d))
-        #a b c d : 좌우 앞뒤 상하 yaw -100~100
+        #a b c d : 좌우 ?��?�� ?��?�� yaw -100~100
         if self.takeoff == 1: 
             self.tello.send_command_without_return("rc {} {} {} {}".format(right-left, front-back, up-down, yaw))
     def com(self, command):
@@ -66,7 +70,7 @@ class drone_tello():
             self.tello.send_command_without_return(command)
     def control_r(self, left=0, right=0, front=0, back=0, up=0, down=0, yaw=0):
         #drone.send_control_command("rc {} {} {} {}".format(a, b, c, d))
-        #a b c d : 좌우 앞뒤 상하 yaw -100~100
+        #a b c d : 좌우 ?��?�� ?��?�� yaw -100~100
         if self.takeoff == 1: 
             return self.tello.send_control_command("rc {} {} {} {}".format(right-left, front-back, up-down, yaw))
         else: return False
@@ -103,7 +107,8 @@ class drone_tello():
             plt.show()
     def qr(self, show = 1):
         value = self.qrd.detect(self.frame_)
-        if show == 1: print('QR detected : ', value)
+        if value != '':
+            if show == 1: print('QR detected : ', value)
         return value
     def hw(self, show = 1):
         value = self.hwd.detect(self.frame_)
@@ -167,7 +172,7 @@ def clr_bin(img, clr, r=20, s=150, v=100):
     img_v = hsv[:,:,2]
     img_b_r = cv2.inRange(img_h, 180-r, 180)
     img_b_r = img_b_r + cv2.inRange(img_h, 0, r)
-    img_b_r[img_v>v+40] = 0 #+40은 일단 임시
+    img_b_r[img_v>v+40] = 0 #+40??? ?��?�� ?��?��
     img_b_r[img_s<s+60] = 0
     img_b_g = cv2.inRange(img_h, 80-r, 80+r)
     img_b_g[img_v>v] = 0
@@ -175,7 +180,7 @@ def clr_bin(img, clr, r=20, s=150, v=100):
     img_b_b = cv2.inRange(img_h, 120-r, 120+r)
     img_b_b[img_v>v] = 0
     img_b_b[img_s<s] = 0
-    # black 부분 수정 필요
+    # black �?�? ?��?�� ?��?��
     img_b_k = cv2.inRange(img_v, 0, 30)
     if clr == 'R': return img_b_r
     if clr == 'G': return img_b_g
@@ -322,42 +327,43 @@ def mission_action(i):
     return a1, a2
 
 def action(drone, i):
-    if i == 1:
-        print('back 30, front 30')
-        drone.com("back {}".format(30))
-        drone.com("front {}".format(30))
-    if i == 2:
-        print('left 30, right 30')
-        drone.com("left {}".format(30))
-        drone.com("right {}".format(30))
-    if i == 3:
-        print('clockwise 360')
-        drone.com("cw {}".format(360))
-    if i == 4:
-        print('right 10, up 10, left 10, down 10') # 이거 되나?
-        drone.com("right {}".format(30))
-        drone.com("up {}".format(30))
-        drone.com("left {}".format(30))
-        drone.com("down {}".format(30))
-    if i == 5:
-        print('flip backward')
-        drone.com("flip {}".format("b"))
-    if i == 6:
-        print('up 30, flip, down 30')
-        drone.com("up {}".format(30))
-        drone.com("flip {}".format("b"))
-        drone.com("down {}".format(30))
-    if i == 7:
-        print('flip left')
-        drone.com("flip {}".format("l"))
-    if i == 8:
-        print('up 30, down 30')
-        drone.com("up {}".format(30))
-        drone.com("down {}".format(30))
-    if i == 9:
-        print('capture picture')
-        cv2.imwrite('9.png', drone.frame_)
-        print('9.png saved')
+    if drone.takeoff == 1:
+        if i == 1:
+            print('back 30, front 30')
+            drone.com("back {}".format(30))
+            drone.com("front {}".format(30))
+        if i == 2:
+            print('left 30, right 30')
+            drone.com("left {}".format(30))
+            drone.com("right {}".format(30))
+        if i == 3:
+            print('clockwise 360')
+            drone.com("cw {}".format(360))
+        if i == 4:
+            print('right 10, up 10, left 10, down 10') # ?���? ?��?��?
+            drone.com("right {}".format(30))
+            drone.com("up {}".format(30))
+            drone.com("left {}".format(30))
+            drone.com("down {}".format(30))
+        if i == 5:
+            print('flip backward')
+            drone.com("flip {}".format("b"))
+        if i == 6:
+            print('up 30, flip, down 30')
+            drone.com("up {}".format(30))
+            drone.com("flip {}".format("b"))
+            drone.com("down {}".format(30))
+        if i == 7:
+            print('flip left')
+            drone.com("flip {}".format("l"))
+        if i == 8:
+            print('up 30, down 30')
+            drone.com("up {}".format(30))
+            drone.com("down {}".format(30))
+        if i == 9:
+            print('capture picture')
+            cv2.imwrite('9.png', drone.frame_)
+            print('9.png saved')
 
 def mission(num, drone):
     if num == 1:
@@ -390,15 +396,17 @@ def circle_follow(cir, clr):
 
 class YOLO():
     def __init__(self):
-        self.model = torch.hub.load('ultralytics/yolov5', 'custom', path='yolo.pt', force_reload=True)
+        #self.model = torch.hub.load('ultralytics/yolov5', 'custom', path='yolo.pt', force_reload=False)
+        self.model = torch.load('yolo.pt')
     def detect_letter(self, img):
         yolo = self.model(img)
         df = yolo.pandas().xyxy[0]
-        yolo.display(render=True)
-        if df.length>0:
+        img = yolo.render()[0]
+        if df.shape[0]>0:
             ret = True
-            letter = df[0][0] # 수정 필요
-            print('letter = ', letter)
+            letter = df['name'] # ?��?�� ?��?��
+            print('letter = \n', letter)
+            letter = int(letter[0])
         else: 
             ret = False
             letter = None
