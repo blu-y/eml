@@ -1,0 +1,5 @@
+train: C:\Users\crown\Desktop\carvis\dataset\ds1\train\images
+val: C:\Users\crown\Desktop\carvis\dataset\ds1\valid\images
+
+nc: 1
+names: ['kau']
