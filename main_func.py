@@ -1,3 +1,6 @@
+#2022 LockheedMartin Falcon Challenger
+#Team EML
+#github.com/blu-y/eml
 #-*- coding: utf-8 -*-
 import cv2
 import numpy as np
